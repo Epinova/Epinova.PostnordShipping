@@ -28,7 +28,7 @@ namespace Epinova.PostnordShipping
 
         public override string ServiceName => nameof(DeliveryService);
 
-        public async Task<ServicePointInformation[]> FindServicePointsAsync(ClientInfo clientInfo, double latitude, double longitude, int maxResults)
+        public async Task<ServicePointInformation[]> FindServicePointsAsync(ClientInfo clientInfo, double latitude, double longitude, int maxResults = 0)
         {
             return (await _fileService.LoadAllServicePointsAsync(clientInfo.FilePath))
                 .Select(x => new { ServicePoint = x, Distance = GetDistanceFromLatLonInKm(latitude, longitude, x.Northing, x.Easting) })

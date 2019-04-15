@@ -49,7 +49,7 @@ namespace Epinova.PostnordShipping
             return content;
         }
 
-        public async Task<ServicePointInformation[]> LoadAllServicePointsAsync(string filePath, bool forceCacheRefresh)
+        public async Task<ServicePointInformation[]> LoadAllServicePointsAsync(string filePath, bool forceCacheRefresh = false)
         {
             const string cacheKey = "servicepointsfallback";
             ServicePointInformation[] result;

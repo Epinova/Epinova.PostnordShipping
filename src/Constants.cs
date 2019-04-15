@@ -1,6 +1,6 @@
 ﻿namespace Epinova.PostnordShipping
 {
-    internal class Constants
+    internal static class Constants
     {
         internal const string BaseUrl = "https://api2.postnord.com/rest/";
     }
