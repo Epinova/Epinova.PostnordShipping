@@ -12,16 +12,11 @@ namespace Epinova.PostnordShipping
 {
     internal class DeliveryService : RestServiceBase, IDeliveryService
     {
-        internal static HttpClient Client;
+        internal static HttpClient Client = new HttpClient { BaseAddress = new Uri(Constants.BaseUrl), Timeout = ApplicationSettings.TimeOut };
         private readonly ICacheHelper _cacheHelper;
         private readonly IJsonFileService _fileService;
         private readonly ILogger _log;
         private readonly IMapper _mapper;
-
-        static DeliveryService()
-        {
-            Client = new HttpClient { BaseAddress = new Uri(Constants.BaseUrl), Timeout = ApplicationSettings.TimeOut };
-        }
 
         public DeliveryService(IJsonFileService fileService, ILogger log, IMapper mapper, ICacheHelper cacheHelper) : base(log)
         {
@@ -33,9 +28,9 @@ namespace Epinova.PostnordShipping
 
         public override string ServiceName => nameof(DeliveryService);
 
-        public async Task<ServicePointInformation[]> FindServicePointsAsync(ClientInfo client, double latitude, double longitude, int maxResults)
+        public async Task<ServicePointInformation[]> FindServicePointsAsync(ClientInfo clientInfo, double latitude, double longitude, int maxResults)
         {
-            return (await _fileService.LoadAllServicePointsAsync(client.FilePath))
+            return (await _fileService.LoadAllServicePointsAsync(clientInfo.FilePath))
                 .Select(x => new { ServicePoint = x, Distance = GetDistanceFromLatLonInKm(latitude, longitude, x.Northing, x.Easting) })
                 .OrderBy(x => x.Distance)
                 .Select(x => x.ServicePoint)
@@ -59,7 +54,7 @@ namespace Epinova.PostnordShipping
             return R * c; // Distance in km
         }
 
-        public async Task<ServicePointInformation> GetServicePointAsync(ClientInfo clientInfo, string pickupPointId, bool forceCacheRefresh)
+        public async Task<ServicePointInformation> GetServicePointAsync(ClientInfo clientInfo, string pickupPointId, bool forceCacheRefresh = false)
         {
             if (String.IsNullOrWhiteSpace(pickupPointId))
             {
