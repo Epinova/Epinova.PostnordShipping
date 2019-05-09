@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net;
+using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 using AutoMapper;
@@ -15,7 +15,7 @@ namespace Epinova.PostnordShipping
 {
     public class JsonFileService : RestServiceBase, IJsonFileService
     {
-        internal static WebClient Client = new WebClient { BaseAddress = Constants.BaseUrl, Encoding = Encoding.UTF8 };
+        private static readonly HttpClient Client = new HttpClient { BaseAddress = new Uri(Constants.BaseUrl), Timeout = ApplicationSettings.TimeOut };
         private readonly ICacheHelper _cacheHelper;
         private readonly ILogger _log;
         private readonly IMapper _mapper;
@@ -29,7 +29,7 @@ namespace Epinova.PostnordShipping
 
         public override string ServiceName => nameof(JsonFileService);
 
-        public string GetAllServicePointsRaw(ClientInfo clientInfo)
+        public async Task<string> GetAllServicePointsRawAsync(ClientInfo clientInfo)
         {
             var parameters = new Dictionary<string, string>
             {
@@ -38,7 +38,7 @@ namespace Epinova.PostnordShipping
             };
 
             string url = $"businesslocation/v1/servicepoint/getServicePointInformation.json?{BuildQueryString(parameters)}";
-            string content = Client.DownloadString(url);
+            string content = await Client.GetStringAsync(url);
 
             if (String.IsNullOrWhiteSpace(content))
             {
@@ -75,7 +75,7 @@ namespace Epinova.PostnordShipping
             return result;
         }
 
-        public bool SaveAllServicePointsRaw(ClientInfo clientInfo, string rawContent)
+        public async Task<bool> SaveAllServicePointsRawAsync(ClientInfo clientInfo, string rawContent)
         {
             try
             {
@@ -87,7 +87,7 @@ namespace Epinova.PostnordShipping
                 return false;
             }
 
-            return WriteToJsonFile(clientInfo.FilePath, rawContent);
+            return await WriteToJsonFileAsync(clientInfo.FilePath, rawContent);
         }
 
         private static async Task<T> ReadFromJsonFileAsync<T>(string filePath) where T : new()
@@ -105,7 +105,7 @@ namespace Epinova.PostnordShipping
             }
         }
 
-        private bool WriteToJsonFile(string filePath, string contentToWrite)
+        private async Task<bool> WriteToJsonFileAsync(string filePath, string contentToWrite)
         {
             bool fileSaved;
 
@@ -113,7 +113,7 @@ namespace Epinova.PostnordShipping
             try
             {
                 writer = new StreamWriter(filePath, false, Encoding.UTF8);
-                writer.Write(contentToWrite);
+                await writer.WriteAsync(contentToWrite);
                 fileSaved = true;
             }
             catch (Exception e)
