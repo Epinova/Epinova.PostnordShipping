@@ -30,7 +30,7 @@ namespace Epinova.PostnordShipping
 
         public async Task<ServicePointInformation[]> FindServicePointsAsync(ClientInfo clientInfo, double latitude, double longitude, int maxResults = 0)
         {
-            return (await _fileService.LoadAllServicePointsAsync(clientInfo.FilePath))
+            return (await _fileService.LoadAllServicePointsAsync(clientInfo))
                 .Select(x => new { ServicePoint = x, Distance = GetDistanceFromLatLonInKm(latitude, longitude, x.Northing, x.Easting) })
                 .OrderBy(x => x.Distance)
                 .Select(x => x.ServicePoint)
@@ -71,7 +71,7 @@ namespace Epinova.PostnordShipping
                 if (result != null)
                     return result;
 
-                result = (await _fileService.LoadAllServicePointsAsync(clientInfo.FilePath)).FirstOrDefault(x => x.Id == pickupPointId);
+                result = (await _fileService.LoadAllServicePointsAsync(clientInfo)).FirstOrDefault(x => x.Id == pickupPointId);
             }
 
             if (result == null)

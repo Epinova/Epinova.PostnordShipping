@@ -49,7 +49,7 @@ namespace Epinova.PostnordShipping
             return content;
         }
 
-        public async Task<ServicePointInformation[]> LoadAllServicePointsAsync(string filePath, bool forceCacheRefresh = false)
+        public async Task<ServicePointInformation[]> LoadAllServicePointsAsync(ClientInfo clientInfo, bool forceCacheRefresh = false)
         {
             const string cacheKey = "servicepointsfallback";
             ServicePointInformation[] result;
@@ -61,7 +61,7 @@ namespace Epinova.PostnordShipping
                     return result;
             }
 
-            ServicePointInformationRootDto dto = await ReadFromJsonFileAsync<ServicePointInformationRootDto>(filePath);
+            ServicePointInformationRootDto dto = await ReadFromJsonFileAsync<ServicePointInformationRootDto>(clientInfo.FilePath);
             if (dto?.ServicePointInformationResponse?.ServicePoints == null)
             {
                 _log.Critical("unable to read service points from disk");
@@ -75,7 +75,7 @@ namespace Epinova.PostnordShipping
             return result;
         }
 
-        public bool SaveAllServicePointsRaw(string filePath, string rawContent)
+        public bool SaveAllServicePointsRaw(ClientInfo clientInfo, string rawContent)
         {
             try
             {
@@ -87,7 +87,7 @@ namespace Epinova.PostnordShipping
                 return false;
             }
 
-            return WriteToJsonFile(filePath, rawContent);
+            return WriteToJsonFile(clientInfo.FilePath, rawContent);
         }
 
         private static async Task<T> ReadFromJsonFileAsync<T>(string filePath) where T : new()
