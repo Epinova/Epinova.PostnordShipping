@@ -5,7 +5,7 @@ namespace Epinova.PostnordShipping
     public interface IJsonFileService
     {
         string GetAllServicePointsRaw(ClientInfo clientInfo);
-        Task<ServicePointInformation[]> LoadAllServicePointsAsync(string filePath, bool forceCacheRefresh = false);
-        bool SaveAllServicePointsRaw(string filePath, string rawContent);
+        Task<ServicePointInformation[]> LoadAllServicePointsAsync(ClientInfo clientInfo, bool forceCacheRefresh = false);
+        bool SaveAllServicePointsRaw(ClientInfo clientInfo, string rawContent);
     }
 }
