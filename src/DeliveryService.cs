@@ -80,7 +80,9 @@ namespace Epinova.PostnordShipping
                 result = await GetServicePointLiveAsync(clientInfo, pickupPointId);
             }
 
-            _cacheHelper.Insert(cacheKey, result, TimeSpan.FromDays(2));
+            if(result != null)
+                _cacheHelper.Insert(cacheKey, result, TimeSpan.FromDays(2));
+
             return result;
         }
 
