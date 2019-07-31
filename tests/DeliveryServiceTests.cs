@@ -10,28 +10,88 @@ using Xunit;
 
 namespace Epinova.PostnordShippingTests
 {
-    public class PaymentGatewayServiceTests
+    public class DeliveryServiceTests
     {
         private readonly ClientInfo _clientInfo;
         private readonly Mock<ILogger> _logMock;
         private readonly TestableHttpMessageHandler _messageHandler;
         private readonly DeliveryService _service;
 
-        public PaymentGatewayServiceTests()
+        public DeliveryServiceTests()
         {
             var mapperConfiguration = new MapperConfiguration(cfg => { cfg.AddProfile(new DeliveryMappingProfile()); });
             _messageHandler = new TestableHttpMessageHandler();
             _logMock = new Mock<ILogger>();
-            var fileServiceMock = new Mock<IJsonFileService>();
             var cacheHelperMock = new Mock<ICacheHelper>();
             DeliveryService.Client = new HttpClient(_messageHandler) { BaseAddress = new Uri("https://fake.api.uri/") };
-            _service = new DeliveryService(fileServiceMock.Object, _logMock.Object, mapperConfiguration.CreateMapper(), cacheHelperMock.Object);
+            _service = new DeliveryService(_logMock.Object, mapperConfiguration.CreateMapper(), cacheHelperMock.Object);
 
             _clientInfo = new ClientInfo { ApiKey = Factory.GetString(), Country = CountryCode.NO };
         }
 
         [Fact]
-        public async Task GetServicePointLiveAsync_ParseResultFails_ReturnsNull()
+        public async Task GetAllServicePoints_FromAPI_ParseResultFails_ReturnsEmptyArray()
+        {
+            _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{ 'Some': 'random', 'unparasable': 'json' }")
+            });
+            ServicePointInformation[] result = await _service.GetAllServicePointsAsync(_clientInfo, true);
+
+            Assert.Empty(result);
+        }
+
+        [Fact]
+        public async Task GetAllServicePoints_FromAPI_ServiceReturnsNull_LogsError()
+        {
+            _messageHandler.SendAsyncReturns(null);
+            await _service.GetAllServicePointsAsync(_clientInfo, true);
+
+            _logMock.VerifyLog(Level.Error, "Get all service points failed. Service response was NULL", Times.Once());
+        }
+
+        [Fact]
+        public async Task GetAllServicePoints_FromAPI_ServiceReturnsNull_ReturnsEmptyArray()
+        {
+            _messageHandler.SendAsyncReturns(null);
+            ServicePointInformation[] result = await _service.GetAllServicePointsAsync(_clientInfo, true);
+
+            Assert.Empty(result);
+        }
+
+        [Fact]
+        public async Task GetAllServicePoints_FromAPI_ServiceReturnsUnauthorizedStatus_LogsError()
+        {
+            _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.Unauthorized));
+
+            await _service.GetAllServicePointsAsync(_clientInfo, true);
+
+            _logMock.VerifyLog<object>(Level.Error, Times.Once());
+        }
+
+        [Fact]
+        public async Task GetAllServicePoints_FromAPI_ServiceReturnsUnauthorizedStatus_ReturnsEmptyArray()
+        {
+            _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.Unauthorized));
+            ServicePointInformation[] result = await _service.GetAllServicePointsAsync(_clientInfo, true);
+
+            Assert.Empty(result);
+        }
+
+        [Fact]
+        public async Task GetAllServicePoints_FromAPI_ServiceReturnsValidJson_ReturnsServicePointArray()
+        {
+            _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(GetValidServiceResultJson(singleResult: true))
+            });
+            ServicePointInformation[] result = await _service.GetAllServicePointsAsync(_clientInfo, true);
+
+            Assert.True(result.Length > 0);
+        }
+
+        [Fact]
+        public async Task GetServicePointLive_ParseResultFails_ReturnsNull()
         {
             _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.OK)
             {
@@ -43,7 +103,7 @@ namespace Epinova.PostnordShippingTests
         }
 
         [Fact]
-        public async Task GetServicePointLiveAsync_ServiceReturnsNull_LogsError()
+        public async Task GetServicePointLive_ServiceReturnsNull_LogsError()
         {
             _messageHandler.SendAsyncReturns(null);
             await _service.GetServicePointLiveAsync(_clientInfo, Factory.GetString(7));
@@ -52,7 +112,7 @@ namespace Epinova.PostnordShippingTests
         }
 
         [Fact]
-        public async Task GetServicePointLiveAsync_ServiceReturnsNull_ReturnsNull()
+        public async Task GetServicePointLive_ServiceReturnsNull_ReturnsNull()
         {
             _messageHandler.SendAsyncReturns(null);
             ServicePointInformation result = await _service.GetServicePointLiveAsync(_clientInfo, Factory.GetString(7));
@@ -61,7 +121,17 @@ namespace Epinova.PostnordShippingTests
         }
 
         [Fact]
-        public async Task GetServicePointLiveAsync_ServiceReturnsUnauthorizedStatus_ReturnsNull()
+        public async Task GetServicePointLive_ServiceReturnsUnauthorizedStatus_LogsError()
+        {
+            _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.Unauthorized));
+
+            await _service.GetServicePointLiveAsync(_clientInfo, Factory.GetString(7));
+
+            _logMock.VerifyLog<object>(Level.Error, Times.Once());
+        }
+
+        [Fact]
+        public async Task GetServicePointLive_ServiceReturnsUnauthorizedStatus_ReturnsNull()
         {
             _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.Unauthorized));
             ServicePointInformation result = await _service.GetServicePointLiveAsync(_clientInfo, Factory.GetString(7));
@@ -70,7 +140,7 @@ namespace Epinova.PostnordShippingTests
         }
 
         [Fact]
-        public async Task GetServicePointLiveAsync_ServiceReturnsValidJson_ReturnsServicePointInfo()
+        public async Task GetServicePointLive_ServiceReturnsValidJson_ReturnsServicePointInfo()
         {
             _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.OK)
             {
@@ -82,7 +152,7 @@ namespace Epinova.PostnordShippingTests
         }
 
         [Fact]
-        public async Task GetServicePointLiveAsync_ServiceReturnsValidJson_ReturnsServiceWithCorrectCoordinates()
+        public async Task GetServicePointLive_ServiceReturnsValidJson_ReturnsServiceWithCorrectCoordinates()
         {
             _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.OK)
             {

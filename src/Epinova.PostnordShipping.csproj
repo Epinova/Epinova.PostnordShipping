@@ -137,8 +137,6 @@
     <Compile Include="FaultDto.cs" />
     <Compile Include="ICacheHelper.cs" />
     <Compile Include="IDeliveryService.cs" />
-    <Compile Include="IJsonFileService.cs" />
-    <Compile Include="JsonFileService.cs" />
     <Compile Include="NotificationAreaDto.cs" />
     <Compile Include="OpeninghourDto.cs" />
     <Compile Include="OpeningHourInfo.cs" />

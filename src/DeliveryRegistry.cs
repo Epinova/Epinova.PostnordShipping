@@ -11,7 +11,6 @@ namespace Epinova.PostnordShipping
             mapperConfiguration.CompileMappings();
 
             For<IDeliveryService>().Use<DeliveryService>().Ctor<IMapper>().Is(mapperConfiguration.CreateMapper());
-            For<IJsonFileService>().Use<JsonFileService>().Ctor<IMapper>().Is(mapperConfiguration.CreateMapper());
             For<ICacheHelper>().Use<CacheHelper>();
         }
     }

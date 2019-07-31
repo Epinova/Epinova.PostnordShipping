@@ -5,12 +5,12 @@ using Xunit.Abstractions;
 
 namespace Epinova.PostnordShippingTests
 {
-    public class PaymentGatewayRegistryTests
+    public class DeliveryRegistryTests
     {
         private readonly Container _container;
         private readonly ITestOutputHelper _output;
 
-        public PaymentGatewayRegistryTests(ITestOutputHelper output)
+        public DeliveryRegistryTests(ITestOutputHelper output)
         {
             _output = output;
             _container = new Container(new TestableRegistry());
@@ -38,14 +38,6 @@ namespace Epinova.PostnordShippingTests
             var instance = _container.GetInstance<IDeliveryService>();
 
             Assert.IsType<DeliveryService>(instance);
-        }
-
-        [Fact]
-        public void Getting_IJsonFileService_ReturnsJsonFileService()
-        {
-            var instance = _container.GetInstance<IJsonFileService>();
-
-            Assert.IsType<JsonFileService>(instance);
         }
     }
 }

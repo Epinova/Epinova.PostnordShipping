@@ -10,17 +10,15 @@ using EPiServer.Logging;
 
 namespace Epinova.PostnordShipping
 {
-    internal class DeliveryService : RestServiceBase, IDeliveryService
+    public class DeliveryService : RestServiceBase, IDeliveryService
     {
         internal static HttpClient Client = new HttpClient { BaseAddress = new Uri(Constants.BaseUrl), Timeout = ApplicationSettings.TimeOut };
         private readonly ICacheHelper _cacheHelper;
-        private readonly IJsonFileService _fileService;
         private readonly ILogger _log;
         private readonly IMapper _mapper;
 
-        public DeliveryService(IJsonFileService fileService, ILogger log, IMapper mapper, ICacheHelper cacheHelper) : base(log)
+        public DeliveryService(ILogger log, IMapper mapper, ICacheHelper cacheHelper) : base(log)
         {
-            _fileService = fileService;
             _log = log;
             _mapper = mapper;
             _cacheHelper = cacheHelper;
@@ -30,12 +28,59 @@ namespace Epinova.PostnordShipping
 
         public async Task<ServicePointInformation[]> FindServicePointsAsync(ClientInfo clientInfo, double latitude, double longitude, int maxResults = 0)
         {
-            return (await _fileService.LoadAllServicePointsAsync(clientInfo))
+            return (await GetAllServicePointsAsync(clientInfo))
                 .Select(x => new { ServicePoint = x, Distance = GetDistanceFromLatLonInKm(latitude, longitude, x.Northing, x.Easting) })
                 .OrderBy(x => x.Distance)
                 .Select(x => x.ServicePoint)
                 .Take(maxResults)
                 .ToArray();
+        }
+
+        public async Task<ServicePointInformation[]> GetAllServicePointsAsync(ClientInfo clientInfo, bool forceCacheRefresh = false)
+        {
+            string cacheKey = $"ServicePointList_{clientInfo.ApiKey}";
+
+            ServicePointInformation[] result;
+
+            if (!forceCacheRefresh)
+            {
+                result = _cacheHelper.Get<ServicePointInformation[]>(cacheKey);
+                if (result != null)
+                    return result;
+            }
+
+            var parameters = new Dictionary<string, string>
+            {
+                { "apikey", clientInfo.ApiKey },
+                { "countryCode", clientInfo.Country.ToString() }
+            };
+
+            string url = $"businesslocation/v1/servicepoint/getServicePointInformation.json?{BuildQueryString(parameters)}";
+            HttpResponseMessage responseMessage = await Call(() => Client.GetAsync(url), true);
+
+            if (responseMessage == null)
+            {
+                _log.Error("Get all service points failed. Service response was NULL");
+                return new ServicePointInformation[0];
+            }
+
+            if (!responseMessage.IsSuccessStatusCode)
+            {
+                _log.Error(new { message = "Get all service points failed. Service response status was not OK", responseMessage.StatusCode });
+                return new ServicePointInformation[0];
+            }
+
+            ServicePointInformationRootDto dto = await ParseJson<ServicePointInformationRootDto>(responseMessage);
+
+            if (dto.HasError || dto.ServicePointInformationResponse?.ServicePoints == null)
+            {
+                _log.Error(new { message = "Get all service points failed. Service response was NULL" });
+                return new ServicePointInformation[0];
+            }
+
+            result = _mapper.Map<ServicePointInformation[]>(dto.ServicePointInformationResponse.ServicePoints);
+            _cacheHelper.Insert(cacheKey, result, clientInfo.CacheTimeout);
+            return result;
         }
 
         public double GetDistanceFromLatLonInKm(double lat1, double lon1, double lat2, double lon2)
@@ -64,14 +109,14 @@ namespace Epinova.PostnordShipping
 
             string cacheKey = $"ServicePoint_{pickupPointId}";
 
-            ServicePointInformation result =null;
+            ServicePointInformation result = null;
             if (!forceCacheRefresh)
             {
                 result = _cacheHelper.Get<ServicePointInformation>(cacheKey);
                 if (result != null)
                     return result;
 
-                result = (await _fileService.LoadAllServicePointsAsync(clientInfo)).FirstOrDefault(x => x.Id == pickupPointId);
+                result = (await GetAllServicePointsAsync(clientInfo)).FirstOrDefault(x => x.Id == pickupPointId);
             }
 
             if (result == null)
@@ -80,8 +125,8 @@ namespace Epinova.PostnordShipping
                 result = await GetServicePointLiveAsync(clientInfo, pickupPointId);
             }
 
-            if(result != null)
-                _cacheHelper.Insert(cacheKey, result, TimeSpan.FromDays(2));
+            if (result != null)
+                _cacheHelper.Insert(cacheKey, result, clientInfo.CacheTimeout);
 
             return result;
         }
@@ -105,6 +150,12 @@ namespace Epinova.PostnordShipping
                 return null;
             }
 
+            if (!responseMessage.IsSuccessStatusCode)
+            {
+                _log.Error(new { message = "Service point fetch failed. Service response status was not OK", responseMessage.StatusCode });
+                return null;
+            }
+
             ServicePointInformationRootDto dto = await ParseJson<ServicePointInformationRootDto>(responseMessage);
 
             if (dto.HasError || dto.ServicePointInformationResponse?.ServicePoints == null)
@@ -115,5 +166,31 @@ namespace Epinova.PostnordShipping
 
             return _mapper.Map<ServicePointInformation[]>(dto.ServicePointInformationResponse.ServicePoints).FirstOrDefault();
         }
+
+        //public async Task<ServicePointInformation[]> LoadAllServicePointsAsync(ClientInfo clientInfo, bool forceCacheRefresh = false)
+        //{
+        //    const string cacheKey = "servicepointsfallback";
+        //    ServicePointInformation[] result;
+
+        //    if (!forceCacheRefresh)
+        //    {
+        //        result = _cacheHelper.Get<ServicePointInformation[]>(cacheKey);
+        //        if (result != null)
+        //            return result;
+        //    }
+
+        //    ServicePointInformationRootDto dto = await ReadFromJsonFileAsync<ServicePointInformationRootDto>(clientInfo.FilePath);
+        //    if (dto?.ServicePointInformationResponse?.ServicePoints == null)
+        //    {
+        //        _log.Critical("unable to read service points from disk");
+        //        return new ServicePointInformation[0];
+        //    }
+
+        //    result = _mapper.Map<ServicePointInformation[]>(dto.ServicePointInformationResponse.ServicePoints.Where(x => x.EligibleParcelOutlet)).Distinct(new ServicePointInformationComparer())
+        //        .ToArray();
+
+        //    _cacheHelper.Insert(cacheKey, result, TimeSpan.FromDays(2));
+        //    return result;
+        //}
     }
 }
