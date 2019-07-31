@@ -24,8 +24,6 @@ namespace Epinova.PostnordShipping
             _cacheHelper = cacheHelper;
         }
 
-        public override string ServiceName => nameof(DeliveryService);
-
         public async Task<ServicePointInformation[]> FindServicePointsAsync(ClientInfo clientInfo, double latitude, double longitude, int maxResults = 0)
         {
             return (await GetAllServicePointsAsync(clientInfo))
@@ -56,7 +54,7 @@ namespace Epinova.PostnordShipping
             };
 
             string url = $"businesslocation/v1/servicepoint/getServicePointInformation.json?{BuildQueryString(parameters)}";
-            HttpResponseMessage responseMessage = await Call(() => Client.GetAsync(url), true);
+            HttpResponseMessage responseMessage = await CallAsync(() => Client.GetAsync(url), true);
 
             if (responseMessage == null)
             {
@@ -70,7 +68,7 @@ namespace Epinova.PostnordShipping
                 return new ServicePointInformation[0];
             }
 
-            ServicePointInformationRootDto dto = await ParseJson<ServicePointInformationRootDto>(responseMessage);
+            ServicePointInformationRootDto dto = await ParseJsonAsync<ServicePointInformationRootDto>(responseMessage);
 
             if (dto.HasError || dto.ServicePointInformationResponse?.ServicePoints == null)
             {
@@ -142,7 +140,7 @@ namespace Epinova.PostnordShipping
 
             string url = $"businesslocation/v1/servicepoint/findByServicePointId.json?{BuildQueryString(parameters)}";
 
-            HttpResponseMessage responseMessage = await Call(() => Client.GetAsync(url), true);
+            HttpResponseMessage responseMessage = await CallAsync(() => Client.GetAsync(url), true);
 
             if (responseMessage == null)
             {
@@ -156,7 +154,7 @@ namespace Epinova.PostnordShipping
                 return null;
             }
 
-            ServicePointInformationRootDto dto = await ParseJson<ServicePointInformationRootDto>(responseMessage);
+            ServicePointInformationRootDto dto = await ParseJsonAsync<ServicePointInformationRootDto>(responseMessage);
 
             if (dto.HasError || dto.ServicePointInformationResponse?.ServicePoints == null)
             {
@@ -166,31 +164,5 @@ namespace Epinova.PostnordShipping
 
             return _mapper.Map<ServicePointInformation[]>(dto.ServicePointInformationResponse.ServicePoints).FirstOrDefault();
         }
-
-        //public async Task<ServicePointInformation[]> LoadAllServicePointsAsync(ClientInfo clientInfo, bool forceCacheRefresh = false)
-        //{
-        //    const string cacheKey = "servicepointsfallback";
-        //    ServicePointInformation[] result;
-
-        //    if (!forceCacheRefresh)
-        //    {
-        //        result = _cacheHelper.Get<ServicePointInformation[]>(cacheKey);
-        //        if (result != null)
-        //            return result;
-        //    }
-
-        //    ServicePointInformationRootDto dto = await ReadFromJsonFileAsync<ServicePointInformationRootDto>(clientInfo.FilePath);
-        //    if (dto?.ServicePointInformationResponse?.ServicePoints == null)
-        //    {
-        //        _log.Critical("unable to read service points from disk");
-        //        return new ServicePointInformation[0];
-        //    }
-
-        //    result = _mapper.Map<ServicePointInformation[]>(dto.ServicePointInformationResponse.ServicePoints.Where(x => x.EligibleParcelOutlet)).Distinct(new ServicePointInformationComparer())
-        //        .ToArray();
-
-        //    _cacheHelper.Insert(cacheKey, result, TimeSpan.FromDays(2));
-        //    return result;
-        //}
     }
 }
