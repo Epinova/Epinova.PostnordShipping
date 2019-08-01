@@ -17,6 +17,9 @@ namespace Epinova.PostnordShipping
 
         public T Get<T>(string key) where T : class
         {
+            if (String.IsNullOrWhiteSpace(key))
+                return default(T);
+
             return _cacheManager.Get(key) as T;
         }
 
@@ -30,7 +33,7 @@ namespace Epinova.PostnordShipping
             if (String.IsNullOrWhiteSpace(key))
                 return;
 
-            _log.Debug($"Key: {key}, Item: {value}, CacheKey: {evictionPolicy?.CacheKeys}, Type: {evictionPolicy?.TimeoutType}, Seconds: {evictionPolicy?.Expiration.Duration().TotalSeconds}");
+            _log.Debug(evictionPolicy, ep => $"Key: {key}, Item: {value}, CacheKey: {ep?.CacheKeys}, Type: {ep?.TimeoutType}, Seconds: {ep?.Expiration.Duration().TotalSeconds}");
 
             _cacheManager.Insert(key, value, evictionPolicy);
         }

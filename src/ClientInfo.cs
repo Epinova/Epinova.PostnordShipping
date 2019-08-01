@@ -7,6 +7,5 @@ namespace Epinova.PostnordShipping
         public string ApiKey { get; set; }
         public TimeSpan CacheTimeout { get; set; } = TimeSpan.FromDays(2);
         public CountryCode Country { get; set; }
-        public string FilePath { get; set; }
     }
 }
