@@ -26,6 +26,7 @@ namespace Epinova.PostnordShipping
 
         public async Task<ServicePointInformation[]> FindServicePointsAsync(ClientInfo clientInfo, double latitude, double longitude, int maxResults = 0)
         {
+            _log.Debug(new { message = "Finding service points", clientInfo, latitude, longitude, maxResults });
             return (await GetAllServicePointsAsync(clientInfo))
                 .Select(x => new { ServicePoint = x, Distance = GetDistanceFromLatLonInKm(latitude, longitude, x.Northing, x.Easting) })
                 .OrderBy(x => x.Distance)
@@ -37,6 +38,7 @@ namespace Epinova.PostnordShipping
         public async Task<ServicePointInformation[]> GetAllServicePointsAsync(ClientInfo clientInfo, bool forceCacheRefresh = false)
         {
             string cacheKey = $"ServicePointList_{clientInfo.ApiKey}";
+            _log.Debug(new { message = "Get all service points", clientInfo, forceCacheRefresh });
 
             ServicePointInformation[] result;
 
@@ -44,7 +46,10 @@ namespace Epinova.PostnordShipping
             {
                 result = _cacheHelper.Get<ServicePointInformation[]>(cacheKey);
                 if (result != null)
+                {
+                    _log.Debug($"Found {result.Length} service points in cache");
                     return result;
+                }
             }
 
             var parameters = new Dictionary<string, string>
@@ -78,6 +83,7 @@ namespace Epinova.PostnordShipping
 
             result = _mapper.Map<ServicePointInformation[]>(dto.ServicePointInformationResponse.ServicePoints);
             _cacheHelper.Insert(cacheKey, result, clientInfo.CacheTimeout);
+            _log.Debug($"Found {result.Length} service points by API call");
             return result;
         }
 
@@ -126,6 +132,7 @@ namespace Epinova.PostnordShipping
             if (result != null)
                 _cacheHelper.Insert(cacheKey, result, clientInfo.CacheTimeout);
 
+            _log.Information(new {message= "Pickup point found.", pickupPointId, result });
             return result;
         }
 
