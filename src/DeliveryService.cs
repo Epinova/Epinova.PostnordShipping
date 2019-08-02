@@ -52,34 +52,36 @@ namespace Epinova.PostnordShipping
                 }
             }
 
-            var parameters = new Dictionary<string, string>
-            {
-                { "apikey", clientInfo.ApiKey },
-                { "countryCode", clientInfo.Country.ToString() }
-            };
+            var dto = Newtonsoft.Json.JsonConvert.DeserializeObject<ServicePointInformationRootDto>(_allServicePointsRaw);
 
-            string url = $"businesslocation/v1/servicepoint/getServicePointInformation.json?{BuildQueryString(parameters)}";
-            HttpResponseMessage responseMessage = await CallAsync(() => Client.GetAsync(url), true);
+            //var parameters = new Dictionary<string, string>
+            //{
+            //    { "apikey", clientInfo.ApiKey },
+            //    { "countryCode", clientInfo.Country.ToString() }
+            //};
 
-            if (responseMessage == null)
-            {
-                _log.Error("Get all service points failed. Service response was NULL");
-                return new ServicePointInformation[0];
-            }
+            //string url = $"businesslocation/v1/servicepoint/getServicePointInformation.json?{BuildQueryString(parameters)}";
+            //HttpResponseMessage responseMessage = await CallAsync(() => Client.GetAsync(url), true);
 
-            if (!responseMessage.IsSuccessStatusCode)
-            {
-                _log.Error(new { message = "Get all service points failed. Service response status was not OK", responseMessage.StatusCode });
-                return new ServicePointInformation[0];
-            }
+            //if (responseMessage == null)
+            //{
+            //    _log.Error("Get all service points failed. Service response was NULL");
+            //    return new ServicePointInformation[0];
+            //}
 
-            ServicePointInformationRootDto dto = await ParseJsonAsync<ServicePointInformationRootDto>(responseMessage);
+            //if (!responseMessage.IsSuccessStatusCode)
+            //{
+            //    _log.Error(new { message = "Get all service points failed. Service response status was not OK", responseMessage.StatusCode });
+            //    return new ServicePointInformation[0];
+            //}
 
-            if (dto.HasError || dto.ServicePointInformationResponse?.ServicePoints == null)
-            {
-                _log.Error(new { message = "Get all service points failed. Service response was NULL" });
-                return new ServicePointInformation[0];
-            }
+            //ServicePointInformationRootDto dto = await ParseJsonAsync<ServicePointInformationRootDto>(responseMessage);
+
+            //if (dto.HasError || dto.ServicePointInformationResponse?.ServicePoints == null)
+            //{
+            //    _log.Error(new { message = "Get all service points failed. Service response was NULL" });
+            //    return new ServicePointInformation[0];
+            //}
 
             result = _mapper.Map<ServicePointInformation[]>(dto.ServicePointInformationResponse.ServicePoints);
             _cacheHelper.Insert(cacheKey, result, clientInfo.CacheTimeout);
@@ -119,20 +121,19 @@ namespace Epinova.PostnordShipping
                 result = _cacheHelper.Get<ServicePointInformation>(cacheKey);
                 if (result != null)
                     return result;
-
-                result = (await GetAllServicePointsAsync(clientInfo)).FirstOrDefault(x => x.Id == pickupPointId);
             }
 
-            if (result == null)
-            {
-                _log.Information($"Pickup point {pickupPointId} not found in application cache. Getting it directly from Postnord");
-                result = await GetServicePointLiveAsync(clientInfo, pickupPointId);
-            }
+            _log.Information($"Pickup point {pickupPointId} not found in application cache. Getting it directly from Postnord");
+            result = await GetServicePointLiveAsync(clientInfo, pickupPointId);
 
             if (result != null)
+            {
                 _cacheHelper.Insert(cacheKey, result, clientInfo.CacheTimeout);
+                _log.Information(new { message = "Pickup point found.", pickupPointId, result });
+            }
+            else
+                _log.Information(new { message = "Pickup point not found.", pickupPointId });
 
-            _log.Information(new {message= "Pickup point found.", pickupPointId, result });
             return result;
         }
 
@@ -171,5 +172,8 @@ namespace Epinova.PostnordShipping
 
             return _mapper.Map<ServicePointInformation[]>(dto.ServicePointInformationResponse.ServicePoints).FirstOrDefault();
         }
+
+
+        private static string _allServicePointsRaw = @"";
     }
 }
