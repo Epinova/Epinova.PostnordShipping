@@ -25,16 +25,16 @@ namespace Epinova.PostnordShipping
             _cacheHelper = cacheHelper;
         }
 
-        public async Task<ServicePointInformation[]> FindServicePointsAsync(ClientInfo clientInfo, double latitude, double longitude, int maxResults = 0)
-        {
-            _log.Debug(new { message = "Finding service points", clientInfo, latitude, longitude, maxResults });
-            return (await GetAllServicePointsAsync(clientInfo))
-                .Select(x => new { ServicePoint = x, Distance = GetDistanceFromLatLonInKm(latitude, longitude, x.Northing, x.Easting) })
-                .OrderBy(x => x.Distance)
-                .Select(x => x.ServicePoint)
-                .Take(maxResults)
-                .ToArray();
-        }
+        //public async Task<ServicePointInformation[]> FindServicePointsAsync(ClientInfo clientInfo, double latitude, double longitude, int maxResults = 0)
+        //{
+        //    _log.Debug(new { message = "Finding service points", clientInfo, latitude, longitude, maxResults });
+        //    return (await GetAllServicePointsAsync(clientInfo))
+        //        .Select(x => new { ServicePoint = x, Distance = GetDistanceFromLatLonInKm(latitude, longitude, x.Northing, x.Easting) })
+        //        .OrderBy(x => x.Distance)
+        //        .Select(x => x.ServicePoint)
+        //        .Take(maxResults)
+        //        .ToArray();
+        //}
 
         public async Task<ServicePointInformation[]> GetAllServicePointsAsync(ClientInfo clientInfo, bool forceCacheRefresh = false)
         {
