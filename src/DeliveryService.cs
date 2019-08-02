@@ -7,6 +7,7 @@ using AutoMapper;
 using Epinova.Infrastructure;
 using Epinova.Infrastructure.Logging;
 using EPiServer.Logging;
+using Newtonsoft.Json;
 
 namespace Epinova.PostnordShipping
 {
@@ -52,7 +53,7 @@ namespace Epinova.PostnordShipping
                 }
             }
 
-            var dto = Newtonsoft.Json.JsonConvert.DeserializeObject<ServicePointInformationRootDto>(_allServicePointsRaw);
+            ServicePointInformationRootDto dto = await Task.Factory.StartNew(() => JsonConvert.DeserializeObject<ServicePointInformationRootDto>(_allServicePointsRaw));
 
             //var parameters = new Dictionary<string, string>
             //{
