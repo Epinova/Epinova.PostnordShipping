@@ -33,7 +33,7 @@ namespace Epinova.PostnordShipping
             if (String.IsNullOrWhiteSpace(key))
                 return;
 
-            _log.Debug(evictionPolicy, ep => $"Key: {key}, Item: {value}, CacheKey: {ep?.CacheKeys}, Type: {ep?.TimeoutType}, Seconds: {ep?.Expiration.Duration().TotalSeconds}");
+            _log.Debug(evictionPolicy, ep => $"Key: {key}, Item: {value}, CacheKeys: {ep?.CacheKeys}, Type: {ep?.TimeoutType}, Seconds: {ep?.Expiration.Duration().TotalSeconds}");
 
             _cacheManager.Insert(key, value, evictionPolicy);
         }
