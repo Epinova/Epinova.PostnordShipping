@@ -5,6 +5,7 @@ Epinova's take on a Postnord shipping API
 [![Build status](https://ci.appveyor.com/api/projects/status/f67kodnd0pkbo9dc/branch/master?svg=true)](https://ci.appveyor.com/project/Epinova_AppVeyor_Team/epinova-postnordshipping/branch/master)
 ![Tests](https://img.shields.io/appveyor/tests/Epinova_AppVeyor_Team/epinova-postnordshipping.svg)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Platform](https://img.shields.io/badge/platform-.NET%20Standard%202.0-blue?style=flat&logo=.net)](https://docs.microsoft.com/en-us/dotnet/standard/net-standard)
 
 ## Getting Started
 
