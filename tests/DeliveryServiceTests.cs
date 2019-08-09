@@ -12,6 +12,7 @@ namespace Epinova.PostnordShippingTests
 {
     public class DeliveryServiceTests
     {
+        private readonly Mock<ICacheHelper> _cacheHelperMock;
         private readonly ClientInfo _clientInfo;
         private readonly Mock<ILogger> _logMock;
         private readonly TestableHttpMessageHandler _messageHandler;
@@ -22,9 +23,9 @@ namespace Epinova.PostnordShippingTests
             var mapperConfiguration = new MapperConfiguration(cfg => { cfg.AddProfile(new DeliveryMappingProfile()); });
             _messageHandler = new TestableHttpMessageHandler();
             _logMock = new Mock<ILogger>();
-            var cacheHelperMock = new Mock<ICacheHelper>();
+            _cacheHelperMock = new Mock<ICacheHelper>();
             DeliveryService.Client = new HttpClient(_messageHandler) { BaseAddress = new Uri("https://fake.api.uri/") };
-            _service = new DeliveryService(_logMock.Object, mapperConfiguration.CreateMapper(), cacheHelperMock.Object);
+            _service = new DeliveryService(_logMock.Object, mapperConfiguration.CreateMapper(), _cacheHelperMock.Object);
 
             _clientInfo = new ClientInfo { ApiKey = Factory.GetString(), Country = CountryCode.NO };
         }
@@ -91,80 +92,102 @@ namespace Epinova.PostnordShippingTests
         //}
 
         [Fact]
-        public async Task GetServicePointLive_ParseResultFails_ReturnsNull()
+        public async Task GetServicePointAsync_ParseResultFails_ReturnsNull()
         {
             _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("{ 'Some': 'random', 'unparasable': 'json' }")
             });
-            ServicePointInformation result = await _service.GetServicePointLiveAsync(_clientInfo, Factory.GetString(4));
+            ServicePointInformation result = await _service.GetServicePointAsync(_clientInfo, Factory.GetString(4));
+
+            Assert.Null(result);
+        }
+
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData(" ")]
+        public async Task GetServicePointAsync_PickupPointIsNullOrEmpty_DoesNotCallService(string pickupPointId)
+        {
+            await _service.GetServicePointAsync(_clientInfo, pickupPointId);
+
+            _cacheHelperMock.Verify(m => m.Get<ServicePointInformation>(It.IsAny<string>()), Times.Never);
+            Assert.Equal(0, _messageHandler.CallCount());
+        }
+
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData(" ")]
+        public async Task GetServicePointAsync_PickupPointIsNullOrEmpty_ReturnsNull(string pickupPointId)
+        {
+            ServicePointInformation result = await _service.GetServicePointAsync(_clientInfo, pickupPointId);
 
             Assert.Null(result);
         }
 
         [Fact]
-        public async Task GetServicePointLive_ServiceReturnsNull_LogsError()
+        public async Task GetServicePointAsync_ServiceReturnsNull_LogsError()
         {
             _messageHandler.SendAsyncReturns(null);
-            await _service.GetServicePointLiveAsync(_clientInfo, Factory.GetString(7));
+            await _service.GetServicePointAsync(_clientInfo, Factory.GetString(7));
 
             _logMock.VerifyLog<object>(Level.Error, Times.Once());
         }
 
         [Fact]
-        public async Task GetServicePointLive_ServiceReturnsNull_ReturnsNull()
+        public async Task GetServicePointAsync_ServiceReturnsNull_ReturnsNull()
         {
             _messageHandler.SendAsyncReturns(null);
-            ServicePointInformation result = await _service.GetServicePointLiveAsync(_clientInfo, Factory.GetString(7));
+            ServicePointInformation result = await _service.GetServicePointAsync(_clientInfo, Factory.GetString(7));
 
             Assert.Null(result);
         }
 
         [Fact]
-        public async Task GetServicePointLive_ServiceReturnsUnauthorizedStatus_LogsError()
+        public async Task GetServicePointAsync_ServiceReturnsUnauthorizedStatus_LogsError()
         {
             _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.Unauthorized));
 
-            await _service.GetServicePointLiveAsync(_clientInfo, Factory.GetString(7));
+            await _service.GetServicePointAsync(_clientInfo, Factory.GetString(7));
 
             _logMock.VerifyLog<object>(Level.Error, Times.Once());
         }
 
         [Fact]
-        public async Task GetServicePointLive_ServiceReturnsUnauthorizedStatus_ReturnsNull()
+        public async Task GetServicePointAsync_ServiceReturnsUnauthorizedStatus_ReturnsNull()
         {
             _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.Unauthorized));
-            ServicePointInformation result = await _service.GetServicePointLiveAsync(_clientInfo, Factory.GetString(7));
+            ServicePointInformation result = await _service.GetServicePointAsync(_clientInfo, Factory.GetString(7));
 
             Assert.Null(result);
         }
 
         [Fact]
-        public async Task GetServicePointLive_ServiceReturnsValidJson_ReturnsServicePointInfo()
+        public async Task GetServicePointAsync_ServiceReturnsValidJson_ReturnsServicePointInfo()
         {
             _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(GetValidServiceResultJson(singleResult: true))
             });
-            ServicePointInformation result = await _service.GetServicePointLiveAsync(_clientInfo, Factory.GetString(7));
+            ServicePointInformation result = await _service.GetServicePointAsync(_clientInfo, Factory.GetString(7));
 
             Assert.IsType<ServicePointInformation>(result);
         }
 
         [Fact]
-        public async Task GetServicePointLive_ServiceReturnsValidJson_ReturnsServiceWithCorrectCoordinates()
+        public async Task GetServicePointAsync_ServiceReturnsValidJson_ReturnsServiceWithCorrectCoordinates()
         {
             _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(GetValidServiceResultJson(singleResult: true))
             });
-            ServicePointInformation result = await _service.GetServicePointLiveAsync(_clientInfo, Factory.GetString(7));
+            ServicePointInformation result = await _service.GetServicePointAsync(_clientInfo, Factory.GetString(7));
 
             Assert.Equal(10.754335161831872F, result.Easting);
             Assert.Equal(59.91169773310983F, result.Northing);
             Assert.Equal("EPSG:4326", result.CoordinateId);
         }
-
 
         private static string GetValidServiceResultJson(bool withDuplicates = false, bool singleResult = false)
         {
