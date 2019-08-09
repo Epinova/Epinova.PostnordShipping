@@ -14,7 +14,7 @@ namespace Epinova.PostnordShippingTests
         }
 
         [Fact]
-        public void AutomapperConfiguration_IsValid()
+        public void AutoMapperConfiguration_IsValid()
         {
             var config = new MapperConfiguration(cfg => { cfg.AddProfile<DeliveryMappingProfile>(); });
 

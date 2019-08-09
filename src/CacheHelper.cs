@@ -1,38 +1,37 @@
 ﻿using System;
-using EPiServer;
 using EPiServer.Framework.Cache;
 using EPiServer.Logging;
 
 namespace Epinova.PostnordShipping
 {
-    internal class CacheHelper : ICacheHelper
+    public class CacheHelper : ICacheHelper
     {
+        private readonly ISynchronizedObjectInstanceCache _cacheManager;
         private readonly ILogger _log;
 
-        public CacheHelper(ILogger log)
+        public CacheHelper(ILogger log, ISynchronizedObjectInstanceCache cacheManager)
         {
             _log = log;
+            _cacheManager = cacheManager;
         }
 
         public T Get<T>(string key) where T : class
         {
-            return CacheManager.Get(key) as T;
+            if (String.IsNullOrWhiteSpace(key))
+                return default(T);
+
+            return _cacheManager.Get(key) as T;
         }
 
         public void Insert(string key, object value, TimeSpan timeToLive)
         {
-            Insert(key, value, new CacheEvictionPolicy(timeToLive, CacheTimeoutType.Absolute));
-        }
-
-
-        public void Insert(string key, object value, CacheEvictionPolicy evictionPolicy)
-        {
             if (String.IsNullOrWhiteSpace(key))
                 return;
+            var evictionPolicy = new CacheEvictionPolicy(timeToLive, CacheTimeoutType.Absolute);
 
-            _log.Debug($"Key: {key}, Item: {value}, CacheKey: {evictionPolicy?.CacheKeys}, Type: {evictionPolicy?.TimeoutType}, Seconds: {evictionPolicy?.Expiration.Duration().TotalSeconds}");
+            _log.Debug(evictionPolicy, ep => $"Key: {key}, Item: {value}, CacheKeys: {ep?.CacheKeys}, Type: {ep?.TimeoutType}, Seconds: {ep?.Expiration.Duration().TotalSeconds}");
 
-            CacheManager.Insert(key, value, evictionPolicy);
+            _cacheManager.Insert(key, value, evictionPolicy);
         }
     }
 }

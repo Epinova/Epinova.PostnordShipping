@@ -10,91 +10,264 @@ using Xunit;
 
 namespace Epinova.PostnordShippingTests
 {
-    public class PaymentGatewayServiceTests
+    public class DeliveryServiceTests
     {
+        private readonly Mock<ICacheHelper> _cacheHelperMock;
         private readonly ClientInfo _clientInfo;
         private readonly Mock<ILogger> _logMock;
         private readonly TestableHttpMessageHandler _messageHandler;
         private readonly DeliveryService _service;
 
-        public PaymentGatewayServiceTests()
+        public DeliveryServiceTests()
         {
             var mapperConfiguration = new MapperConfiguration(cfg => { cfg.AddProfile(new DeliveryMappingProfile()); });
             _messageHandler = new TestableHttpMessageHandler();
             _logMock = new Mock<ILogger>();
-            var fileServiceMock = new Mock<IJsonFileService>();
-            var cacheHelperMock = new Mock<ICacheHelper>();
+            _cacheHelperMock = new Mock<ICacheHelper>();
+
             DeliveryService.Client = new HttpClient(_messageHandler) { BaseAddress = new Uri("https://fake.api.uri/") };
-            _service = new DeliveryService(fileServiceMock.Object, _logMock.Object, mapperConfiguration.CreateMapper(), cacheHelperMock.Object);
+            _service = new DeliveryService(_logMock.Object, mapperConfiguration.CreateMapper(), _cacheHelperMock.Object);
 
             _clientInfo = new ClientInfo { ApiKey = Factory.GetString(), Country = CountryCode.NO };
         }
 
         [Fact]
-        public async Task GetServicePointLiveAsync_ParseResultFails_ReturnsNull()
+        public async Task GetAllServicePoints_ItemsFoundInCach_DoesNotCallService()
+        {
+            ServicePointInformation[] cachedResult =
+            {
+                new ServicePointInformation { Id = Factory.GetString(7) },
+                new ServicePointInformation { Id = Factory.GetString(7) },
+                new ServicePointInformation { Id = Factory.GetString(7) }
+            };
+            _cacheHelperMock.Setup(m => m.Get<ServicePointInformation[]>(It.IsAny<string>())).Returns(cachedResult);
+            await _service.GetAllServicePointsAsync(_clientInfo);
+
+            Assert.Equal(0, _messageHandler.CallCount());
+        }
+
+        [Fact]
+        public async Task GetAllServicePoints_ItemsFoundInCach_ReturnsCachedResult()
+        {
+            ServicePointInformation[] cachedResult =
+            {
+                new ServicePointInformation { Id = Factory.GetString(7) },
+                new ServicePointInformation { Id = Factory.GetString(7) },
+                new ServicePointInformation { Id = Factory.GetString(7) }
+            };
+            _cacheHelperMock.Setup(m => m.Get<ServicePointInformation[]>(It.IsAny<string>())).Returns(cachedResult);
+
+            ServicePointInformation[] result = await _service.GetAllServicePointsAsync(_clientInfo);
+
+            Assert.Same(cachedResult, result);
+        }
+
+        [Fact]
+        public async Task GetAllServicePoints_ParseResultFails_ReturnsEmptyArray()
         {
             _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("{ 'Some': 'random', 'unparasable': 'json' }")
             });
-            ServicePointInformation result = await _service.GetServicePointLiveAsync(_clientInfo, Factory.GetString(4));
+            ServicePointInformation[] result = await _service.GetAllServicePointsAsync(_clientInfo);
 
-            Assert.Null(result);
+            Assert.Empty(result);
         }
 
         [Fact]
-        public async Task GetServicePointLiveAsync_ServiceReturnsNull_LogsError()
+        public async Task GetAllServicePoints_ServiceReturnsNull_LogsError()
         {
             _messageHandler.SendAsyncReturns(null);
-            await _service.GetServicePointLiveAsync(_clientInfo, Factory.GetString(7));
+            await _service.GetAllServicePointsAsync(_clientInfo);
+
+            _logMock.VerifyLog(Level.Error, "Get all service points failed. Service response was NULL", Times.Once());
+        }
+
+        [Fact]
+        public async Task GetAllServicePoints_ServiceReturnsNull_ReturnsEmptyArray()
+        {
+            _messageHandler.SendAsyncReturns(null);
+            ServicePointInformation[] result = await _service.GetAllServicePointsAsync(_clientInfo);
+
+            Assert.Empty(result);
+        }
+
+        [Fact]
+        public async Task GetAllServicePoints_ServiceReturnsUnauthorizedStatus_LogsError()
+        {
+            _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.Unauthorized));
+
+            await _service.GetAllServicePointsAsync(_clientInfo);
 
             _logMock.VerifyLog<object>(Level.Error, Times.Once());
         }
 
         [Fact]
-        public async Task GetServicePointLiveAsync_ServiceReturnsNull_ReturnsNull()
-        {
-            _messageHandler.SendAsyncReturns(null);
-            ServicePointInformation result = await _service.GetServicePointLiveAsync(_clientInfo, Factory.GetString(7));
-
-            Assert.Null(result);
-        }
-
-        [Fact]
-        public async Task GetServicePointLiveAsync_ServiceReturnsUnauthorizedStatus_ReturnsNull()
+        public async Task GetAllServicePoints_ServiceReturnsUnauthorizedStatus_ReturnsEmptyArray()
         {
             _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.Unauthorized));
-            ServicePointInformation result = await _service.GetServicePointLiveAsync(_clientInfo, Factory.GetString(7));
+            ServicePointInformation[] result = await _service.GetAllServicePointsAsync(_clientInfo);
+
+            Assert.Empty(result);
+        }
+
+        [Fact]
+        public async Task GetAllServicePoints_ServiceReturnsValidJson_CacheServicePointArray()
+        {
+            _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(GetValidServiceResultJson(singleResult: false))
+            });
+            ServicePointInformation[] result = await _service.GetAllServicePointsAsync(_clientInfo);
+
+            _cacheHelperMock.Verify(m => m.Insert(It.IsAny<string>(), result, It.IsAny<TimeSpan>()), Times.Once);
+        }
+
+        [Fact]
+        public async Task GetAllServicePoints_ServiceReturnsValidJson_ReturnsServicePointArray()
+        {
+            _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(GetValidServiceResultJson(singleResult: false))
+            });
+            ServicePointInformation[] result = await _service.GetAllServicePointsAsync(_clientInfo);
+
+            Assert.True(result.Length > 0);
+        }
+
+        [Fact]
+        public async Task GetServicePointAsync_ItemFoundInCache_DoesNotCallService()
+        {
+            string pickupPointId = Factory.GetString(7);
+            var cachedResult = new ServicePointInformation { Id = pickupPointId };
+            _cacheHelperMock.Setup(m => m.Get<ServicePointInformation>(It.IsAny<string>())).Returns(cachedResult);
+
+            await _service.GetServicePointAsync(_clientInfo, pickupPointId);
+
+            Assert.Equal(0, _messageHandler.CallCount());
+        }
+
+        [Fact]
+        public async Task GetServicePointAsync_ItemFoundInCache_ReturnsCachedResult()
+        {
+            string pickupPointId = Factory.GetString(7);
+            var cachedResult = new ServicePointInformation { Id = pickupPointId };
+            _cacheHelperMock.Setup(m => m.Get<ServicePointInformation>(It.IsAny<string>())).Returns(cachedResult);
+
+            ServicePointInformation result = await _service.GetServicePointAsync(_clientInfo, pickupPointId);
+
+            Assert.Same(cachedResult, result);
+        }
+
+        [Fact]
+        public async Task GetServicePointAsync_ParseResultFails_ReturnsNull()
+        {
+            _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{ 'Some': 'random', 'unparasable': 'json' }")
+            });
+            ServicePointInformation result = await _service.GetServicePointAsync(_clientInfo, Factory.GetString(4));
+
+            Assert.Null(result);
+        }
+
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData(" ")]
+        public async Task GetServicePointAsync_PickupPointIsNullOrEmpty_DoesNotCallService(string pickupPointId)
+        {
+            await _service.GetServicePointAsync(_clientInfo, pickupPointId);
+
+            _cacheHelperMock.Verify(m => m.Get<ServicePointInformation>(It.IsAny<string>()), Times.Never);
+            Assert.Equal(0, _messageHandler.CallCount());
+        }
+
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData(" ")]
+        public async Task GetServicePointAsync_PickupPointIsNullOrEmpty_ReturnsNull(string pickupPointId)
+        {
+            ServicePointInformation result = await _service.GetServicePointAsync(_clientInfo, pickupPointId);
 
             Assert.Null(result);
         }
 
         [Fact]
-        public async Task GetServicePointLiveAsync_ServiceReturnsValidJson_ReturnsServicePointInfo()
+        public async Task GetServicePointAsync_ServiceReturnsNull_LogsError()
+        {
+            _messageHandler.SendAsyncReturns(null);
+            await _service.GetServicePointAsync(_clientInfo, Factory.GetString(7));
+
+            _logMock.VerifyLog<object>(Level.Error, Times.Once());
+        }
+
+        [Fact]
+        public async Task GetServicePointAsync_ServiceReturnsNull_ReturnsNull()
+        {
+            _messageHandler.SendAsyncReturns(null);
+            ServicePointInformation result = await _service.GetServicePointAsync(_clientInfo, Factory.GetString(7));
+
+            Assert.Null(result);
+        }
+
+        [Fact]
+        public async Task GetServicePointAsync_ServiceReturnsUnauthorizedStatus_LogsError()
+        {
+            _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.Unauthorized));
+
+            await _service.GetServicePointAsync(_clientInfo, Factory.GetString(7));
+
+            _logMock.VerifyLog<object>(Level.Error, Times.Once());
+        }
+
+        [Fact]
+        public async Task GetServicePointAsync_ServiceReturnsUnauthorizedStatus_ReturnsNull()
+        {
+            _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.Unauthorized));
+            ServicePointInformation result = await _service.GetServicePointAsync(_clientInfo, Factory.GetString(7));
+
+            Assert.Null(result);
+        }
+
+        [Fact]
+        public async Task GetServicePointAsync_ServiceReturnsValidJson_CacheServicePointInfo()
         {
             _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(GetValidServiceResultJson(singleResult: true))
             });
-            ServicePointInformation result = await _service.GetServicePointLiveAsync(_clientInfo, Factory.GetString(7));
+            ServicePointInformation result = await _service.GetServicePointAsync(_clientInfo, Factory.GetString(7));
+
+            _cacheHelperMock.Verify(m => m.Insert(It.IsAny<string>(), result, It.IsAny<TimeSpan>()));
+        }
+
+        [Fact]
+        public async Task GetServicePointAsync_ServiceReturnsValidJson_ReturnsServicePointInfo()
+        {
+            _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(GetValidServiceResultJson(singleResult: true))
+            });
+            ServicePointInformation result = await _service.GetServicePointAsync(_clientInfo, Factory.GetString(7));
 
             Assert.IsType<ServicePointInformation>(result);
         }
 
         [Fact]
-        public async Task GetServicePointLiveAsync_ServiceReturnsValidJson_ReturnsServiceWithCorrectCoordinates()
+        public async Task GetServicePointAsync_ServiceReturnsValidJson_ReturnsServiceWithCorrectCoordinates()
         {
             _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(GetValidServiceResultJson(singleResult: true))
             });
-            ServicePointInformation result = await _service.GetServicePointLiveAsync(_clientInfo, Factory.GetString(7));
+            ServicePointInformation result = await _service.GetServicePointAsync(_clientInfo, Factory.GetString(7));
 
             Assert.Equal(10.754335161831872F, result.Easting);
             Assert.Equal(59.91169773310983F, result.Northing);
             Assert.Equal("EPSG:4326", result.CoordinateId);
         }
-
 
         private static string GetValidServiceResultJson(bool withDuplicates = false, bool singleResult = false)
         {

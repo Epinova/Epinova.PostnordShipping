@@ -10,39 +10,77 @@ using EPiServer.Logging;
 
 namespace Epinova.PostnordShipping
 {
-    internal class DeliveryService : RestServiceBase, IDeliveryService
+    public class DeliveryService : RestServiceBase, IDeliveryService
     {
         internal static HttpClient Client = new HttpClient { BaseAddress = new Uri(Constants.BaseUrl), Timeout = ApplicationSettings.TimeOut };
         private readonly ICacheHelper _cacheHelper;
-        private readonly IJsonFileService _fileService;
         private readonly ILogger _log;
         private readonly IMapper _mapper;
 
-        public DeliveryService(IJsonFileService fileService, ILogger log, IMapper mapper, ICacheHelper cacheHelper) : base(log)
+        public DeliveryService(ILogger log, IMapper mapper, ICacheHelper cacheHelper) : base(log)
         {
-            _fileService = fileService;
             _log = log;
             _mapper = mapper;
             _cacheHelper = cacheHelper;
         }
 
-        public override string ServiceName => nameof(DeliveryService);
-
-        public async Task<ServicePointInformation[]> FindServicePointsAsync(ClientInfo clientInfo, double latitude, double longitude, int maxResults = 0)
+        public async Task<ServicePointInformation[]> GetAllServicePointsAsync(ClientInfo clientInfo, bool forceCacheRefresh = false)
         {
-            return (await _fileService.LoadAllServicePointsAsync(clientInfo))
-                .Select(x => new { ServicePoint = x, Distance = GetDistanceFromLatLonInKm(latitude, longitude, x.Northing, x.Easting) })
-                .OrderBy(x => x.Distance)
-                .Select(x => x.ServicePoint)
-                .Take(maxResults)
-                .ToArray();
+            string cacheKey = $"ServicePointList_{clientInfo.ApiKey}";
+            _log.Debug(new { message = "Get all service points", clientInfo, forceCacheRefresh });
+
+            ServicePointInformation[] result;
+
+            if (!forceCacheRefresh)
+            {
+                result = _cacheHelper.Get<ServicePointInformation[]>(cacheKey);
+                if (result != null && result.Any())
+                {
+                    _log.Debug($"Found {result.Length} service points in cache");
+                    return result;
+                }
+            }
+
+            var parameters = new Dictionary<string, string>
+            {
+                { "apikey", clientInfo.ApiKey },
+                { "countryCode", clientInfo.Country.ToString() }
+            };
+
+            string url = $"businesslocation/v1/servicepoint/getServicePointInformation.json?{BuildQueryString(parameters)}";
+            HttpResponseMessage responseMessage = await CallAsync(() => Client.GetAsync(url), true);
+
+            if (responseMessage == null)
+            {
+                _log.Error("Get all service points failed. Service response was NULL");
+                return new ServicePointInformation[0];
+            }
+
+            if (!responseMessage.IsSuccessStatusCode)
+            {
+                _log.Error(new { message = "Get all service points failed. Service response status was not OK", responseMessage.StatusCode });
+                return new ServicePointInformation[0];
+            }
+
+            ServicePointInformationRootDto dto = await ParseJsonAsync<ServicePointInformationRootDto>(responseMessage);
+
+            if (dto.HasError || dto.ServicePointInformationResponse?.ServicePoints == null)
+            {
+                _log.Error(new { message = "Get all service points failed. Service response was NULL" });
+                return new ServicePointInformation[0];
+            }
+
+            result = _mapper.Map<ServicePointInformation[]>(dto.ServicePointInformationResponse.ServicePoints);
+            _cacheHelper.Insert(cacheKey, result, clientInfo.CacheTimeout);
+            _log.Debug($"Found {result.Length} service points by API call");
+            return result;
         }
 
         public double GetDistanceFromLatLonInKm(double lat1, double lon1, double lat2, double lon2)
         {
             double Deg2Rad(double deg) => deg * (Math.PI / 180);
 
-            var R = 6371; // Radius of the earth in km
+            const int earthRadius = 6371; // Radius of the earth in km
             double dLat = Deg2Rad(lat2 - lat1); // deg2rad below
             double dLon = Deg2Rad(lon2 - lon1);
             double a =
@@ -51,7 +89,7 @@ namespace Epinova.PostnordShipping
                 Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
 
             double c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
-            return R * c; // Distance in km
+            return earthRadius * c; // Distance in km
         }
 
         public async Task<ServicePointInformation> GetServicePointAsync(ClientInfo clientInfo, string pickupPointId, bool forceCacheRefresh = false)
@@ -64,29 +102,29 @@ namespace Epinova.PostnordShipping
 
             string cacheKey = $"ServicePoint_{pickupPointId}";
 
-            ServicePointInformation result =null;
+            ServicePointInformation result;
             if (!forceCacheRefresh)
             {
                 result = _cacheHelper.Get<ServicePointInformation>(cacheKey);
                 if (result != null)
                     return result;
-
-                result = (await _fileService.LoadAllServicePointsAsync(clientInfo)).FirstOrDefault(x => x.Id == pickupPointId);
             }
 
-            if (result == null)
+            _log.Information($"Pickup point {pickupPointId} not found in application cache. Getting it directly from Postnord");
+            result = await GetServicePointLiveAsync(clientInfo, pickupPointId);
+
+            if (result != null)
             {
-                _log.Information($"Pickup point {pickupPointId} not found in application cache. Getting it directly from Postnord");
-                result = await GetServicePointLiveAsync(clientInfo, pickupPointId);
+                _cacheHelper.Insert(cacheKey, result, clientInfo.CacheTimeout);
+                _log.Information(new { message = "Pickup point found.", pickupPointId, result });
             }
-
-            if(result != null)
-                _cacheHelper.Insert(cacheKey, result, TimeSpan.FromDays(2));
+            else
+                _log.Information(new { message = "Pickup point not found.", pickupPointId });
 
             return result;
         }
 
-        internal async Task<ServicePointInformation> GetServicePointLiveAsync(ClientInfo clientInfo, string pickupPointId)
+        private async Task<ServicePointInformation> GetServicePointLiveAsync(ClientInfo clientInfo, string pickupPointId)
         {
             var parameters = new Dictionary<string, string>
             {
@@ -97,7 +135,7 @@ namespace Epinova.PostnordShipping
 
             string url = $"businesslocation/v1/servicepoint/findByServicePointId.json?{BuildQueryString(parameters)}";
 
-            HttpResponseMessage responseMessage = await Call(() => Client.GetAsync(url), true);
+            HttpResponseMessage responseMessage = await CallAsync(() => Client.GetAsync(url), true);
 
             if (responseMessage == null)
             {
@@ -105,7 +143,13 @@ namespace Epinova.PostnordShipping
                 return null;
             }
 
-            ServicePointInformationRootDto dto = await ParseJson<ServicePointInformationRootDto>(responseMessage);
+            if (!responseMessage.IsSuccessStatusCode)
+            {
+                _log.Error(new { message = "Service point fetch failed. Service response status was not OK", responseMessage.StatusCode });
+                return null;
+            }
+
+            ServicePointInformationRootDto dto = await ParseJsonAsync<ServicePointInformationRootDto>(responseMessage);
 
             if (dto.HasError || dto.ServicePointInformationResponse?.ServicePoints == null)
             {
@@ -113,7 +157,7 @@ namespace Epinova.PostnordShipping
                 return null;
             }
 
-            return _mapper.Map<ServicePointInformation[]>(dto.ServicePointInformationResponse.ServicePoints).FirstOrDefault();
+            return _mapper.Map<ServicePointInformation>(dto.ServicePointInformationResponse.ServicePoints.FirstOrDefault());
         }
     }
 }
