@@ -24,10 +24,42 @@ namespace Epinova.PostnordShippingTests
             _messageHandler = new TestableHttpMessageHandler();
             _logMock = new Mock<ILogger>();
             _cacheHelperMock = new Mock<ICacheHelper>();
+
             DeliveryService.Client = new HttpClient(_messageHandler) { BaseAddress = new Uri("https://fake.api.uri/") };
             _service = new DeliveryService(_logMock.Object, mapperConfiguration.CreateMapper(), _cacheHelperMock.Object);
 
             _clientInfo = new ClientInfo { ApiKey = Factory.GetString(), Country = CountryCode.NO };
+        }
+
+        [Fact]
+        public async Task GetAllServicePoints_ItemsFoundInCach_DoesNotCallService()
+        {
+            ServicePointInformation[] cachedResult =
+            {
+                new ServicePointInformation { Id = Factory.GetString(7) },
+                new ServicePointInformation { Id = Factory.GetString(7) },
+                new ServicePointInformation { Id = Factory.GetString(7) }
+            };
+            _cacheHelperMock.Setup(m => m.Get<ServicePointInformation[]>(It.IsAny<string>())).Returns(cachedResult);
+            await _service.GetAllServicePointsAsync(_clientInfo);
+
+            Assert.Equal(0, _messageHandler.CallCount());
+        }
+
+        [Fact]
+        public async Task GetAllServicePoints_ItemsFoundInCach_ReturnsCachedResult()
+        {
+            ServicePointInformation[] cachedResult =
+            {
+                new ServicePointInformation { Id = Factory.GetString(7) },
+                new ServicePointInformation { Id = Factory.GetString(7) },
+                new ServicePointInformation { Id = Factory.GetString(7) }
+            };
+            _cacheHelperMock.Setup(m => m.Get<ServicePointInformation[]>(It.IsAny<string>())).Returns(cachedResult);
+
+            ServicePointInformation[] result = await _service.GetAllServicePointsAsync(_clientInfo);
+
+            Assert.Same(cachedResult, result);
         }
 
         [Fact]
@@ -37,7 +69,7 @@ namespace Epinova.PostnordShippingTests
             {
                 Content = new StringContent("{ 'Some': 'random', 'unparasable': 'json' }")
             });
-            ServicePointInformation[] result = await _service.GetAllServicePointsAsync(_clientInfo, true);
+            ServicePointInformation[] result = await _service.GetAllServicePointsAsync(_clientInfo);
 
             Assert.Empty(result);
         }
@@ -46,7 +78,7 @@ namespace Epinova.PostnordShippingTests
         public async Task GetAllServicePoints_ServiceReturnsNull_LogsError()
         {
             _messageHandler.SendAsyncReturns(null);
-            await _service.GetAllServicePointsAsync(_clientInfo, true);
+            await _service.GetAllServicePointsAsync(_clientInfo);
 
             _logMock.VerifyLog(Level.Error, "Get all service points failed. Service response was NULL", Times.Once());
         }
@@ -55,7 +87,7 @@ namespace Epinova.PostnordShippingTests
         public async Task GetAllServicePoints_ServiceReturnsNull_ReturnsEmptyArray()
         {
             _messageHandler.SendAsyncReturns(null);
-            ServicePointInformation[] result = await _service.GetAllServicePointsAsync(_clientInfo, true);
+            ServicePointInformation[] result = await _service.GetAllServicePointsAsync(_clientInfo);
 
             Assert.Empty(result);
         }
@@ -65,7 +97,7 @@ namespace Epinova.PostnordShippingTests
         {
             _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.Unauthorized));
 
-            await _service.GetAllServicePointsAsync(_clientInfo, true);
+            await _service.GetAllServicePointsAsync(_clientInfo);
 
             _logMock.VerifyLog<object>(Level.Error, Times.Once());
         }
@@ -74,9 +106,21 @@ namespace Epinova.PostnordShippingTests
         public async Task GetAllServicePoints_ServiceReturnsUnauthorizedStatus_ReturnsEmptyArray()
         {
             _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.Unauthorized));
-            ServicePointInformation[] result = await _service.GetAllServicePointsAsync(_clientInfo, true);
+            ServicePointInformation[] result = await _service.GetAllServicePointsAsync(_clientInfo);
 
             Assert.Empty(result);
+        }
+
+        [Fact]
+        public async Task GetAllServicePoints_ServiceReturnsValidJson_CacheServicePointArray()
+        {
+            _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(GetValidServiceResultJson(singleResult: false))
+            });
+            ServicePointInformation[] result = await _service.GetAllServicePointsAsync(_clientInfo);
+
+            _cacheHelperMock.Verify(m => m.Insert(It.IsAny<string>(), result, It.IsAny<TimeSpan>()), Times.Once);
         }
 
         [Fact]
@@ -84,11 +128,35 @@ namespace Epinova.PostnordShippingTests
         {
             _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent(GetValidServiceResultJson(singleResult: true))
+                Content = new StringContent(GetValidServiceResultJson(singleResult: false))
             });
-            ServicePointInformation[] result = await _service.GetAllServicePointsAsync(_clientInfo, true);
+            ServicePointInformation[] result = await _service.GetAllServicePointsAsync(_clientInfo);
 
             Assert.True(result.Length > 0);
+        }
+
+        [Fact]
+        public async Task GetServicePointAsync_ItemFoundInCache_DoesNotCallService()
+        {
+            string pickupPointId = Factory.GetString(7);
+            var cachedResult = new ServicePointInformation { Id = pickupPointId };
+            _cacheHelperMock.Setup(m => m.Get<ServicePointInformation>(It.IsAny<string>())).Returns(cachedResult);
+
+            await _service.GetServicePointAsync(_clientInfo, pickupPointId);
+
+            Assert.Equal(0, _messageHandler.CallCount());
+        }
+
+        [Fact]
+        public async Task GetServicePointAsync_ItemFoundInCache_ReturnsCachedResult()
+        {
+            string pickupPointId = Factory.GetString(7);
+            var cachedResult = new ServicePointInformation { Id = pickupPointId };
+            _cacheHelperMock.Setup(m => m.Get<ServicePointInformation>(It.IsAny<string>())).Returns(cachedResult);
+
+            ServicePointInformation result = await _service.GetServicePointAsync(_clientInfo, pickupPointId);
+
+            Assert.Same(cachedResult, result);
         }
 
         [Fact]
@@ -161,6 +229,18 @@ namespace Epinova.PostnordShippingTests
             ServicePointInformation result = await _service.GetServicePointAsync(_clientInfo, Factory.GetString(7));
 
             Assert.Null(result);
+        }
+
+        [Fact]
+        public async Task GetServicePointAsync_ServiceReturnsValidJson_CacheServicePointInfo()
+        {
+            _messageHandler.SendAsyncReturns(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(GetValidServiceResultJson(singleResult: true))
+            });
+            ServicePointInformation result = await _service.GetServicePointAsync(_clientInfo, Factory.GetString(7));
+
+            _cacheHelperMock.Verify(m => m.Insert(It.IsAny<string>(), result, It.IsAny<TimeSpan>()));
         }
 
         [Fact]

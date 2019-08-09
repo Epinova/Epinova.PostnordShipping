@@ -34,7 +34,7 @@ namespace Epinova.PostnordShipping
             if (!forceCacheRefresh)
             {
                 result = _cacheHelper.Get<ServicePointInformation[]>(cacheKey);
-                if (result != null)
+                if (result != null && result.Any())
                 {
                     _log.Debug($"Found {result.Length} service points in cache");
                     return result;
@@ -157,7 +157,7 @@ namespace Epinova.PostnordShipping
                 return null;
             }
 
-            return _mapper.Map<ServicePointInformation[]>(dto.ServicePointInformationResponse.ServicePoints).FirstOrDefault();
+            return _mapper.Map<ServicePointInformation>(dto.ServicePointInformationResponse.ServicePoints.FirstOrDefault());
         }
     }
 }
