@@ -124,7 +124,7 @@ namespace Epinova.PostnordShipping
             return result;
         }
 
-        internal async Task<ServicePointInformation> GetServicePointLiveAsync(ClientInfo clientInfo, string pickupPointId)
+        private async Task<ServicePointInformation> GetServicePointLiveAsync(ClientInfo clientInfo, string pickupPointId)
         {
             var parameters = new Dictionary<string, string>
             {
