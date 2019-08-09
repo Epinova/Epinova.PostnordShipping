@@ -25,13 +25,9 @@ namespace Epinova.PostnordShipping
 
         public void Insert(string key, object value, TimeSpan timeToLive)
         {
-            Insert(key, value, new CacheEvictionPolicy(timeToLive, CacheTimeoutType.Absolute));
-        }
-
-        public void Insert(string key, object value, CacheEvictionPolicy evictionPolicy)
-        {
             if (String.IsNullOrWhiteSpace(key))
                 return;
+            var evictionPolicy = new CacheEvictionPolicy(timeToLive, CacheTimeoutType.Absolute);
 
             _log.Debug(evictionPolicy, ep => $"Key: {key}, Item: {value}, CacheKeys: {ep?.CacheKeys}, Type: {ep?.TimeoutType}, Seconds: {ep?.Expiration.Duration().TotalSeconds}");
 
