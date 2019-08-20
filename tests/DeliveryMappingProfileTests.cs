@@ -33,6 +33,32 @@ namespace Epinova.PostnordShippingTests
             Assert.Equal(dto.ServicePointId, result.Id);
         }
 
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void Map_ServicePointDto_CorrectIsEligibleParcelOutlet(bool eligibleParcelOutlet)
+        {
+            var config = new MapperConfiguration(cfg => { cfg.AddProfile<DeliveryMappingProfile>(); });
+            IMapper mapper = config.CreateMapper();
+
+            var dto = new ServicePointDto { EligibleParcelOutlet = eligibleParcelOutlet };
+            var result = mapper.Map<ServicePointInformation>(dto);
+
+            Assert.Equal(dto.EligibleParcelOutlet, result.IsEligibleParcelOutlet);
+        }
+
+        [Fact]
+        public void Map_ServicePointDto_CorrectNotificationPostalCodes()
+        {
+            var config = new MapperConfiguration(cfg => { cfg.AddProfile<DeliveryMappingProfile>(); });
+            IMapper mapper = config.CreateMapper();
+
+            var dto = new ServicePointDto { NotificationArea = new NotificationAreaDto { PostalCodes = new[] { Factory.GetString(), Factory.GetString() } } };
+            var result = mapper.Map<ServicePointInformation>(dto);
+
+            Assert.Collection(result.NotificationPostalCodes, x => Assert.Equal(dto.NotificationArea.PostalCodes[0], x), x => Assert.Equal(dto.NotificationArea.PostalCodes[1], x));
+        }
+
         [Fact]
         public void Map_ServicePointDtoHasCoordinateArray_CorrectEasting()
         {
