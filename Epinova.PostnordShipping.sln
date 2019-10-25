@@ -1,14 +1,15 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.28307.572
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29418.71
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Epinova.PostnordShipping", "src\Epinova.PostnordShipping.csproj", "{C2E495D9-37EE-4F42-9DF9-694EB0C48BFF}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Epinova.PostnordShipping", "src\Epinova.PostnordShipping.csproj", "{C2E495D9-37EE-4F42-9DF9-694EB0C48BFF}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Epinova.PostnordShippingTests", "tests\Epinova.PostnordShippingTests.csproj", "{D6314AD8-22B0-47DD-9850-FD03C7562C67}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Epinova.PostnordShippingTests", "tests\Epinova.PostnordShippingTests.csproj", "{D6314AD8-22B0-47DD-9850-FD03C7562C67}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "assets", "assets", "{421D77DA-E89B-4681-A377-1EB8BF5E3D81}"
 	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
 		.gitignore = .gitignore
 		appveyor.yml = appveyor.yml
 		LICENSE = LICENSE
