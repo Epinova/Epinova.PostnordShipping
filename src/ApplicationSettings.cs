@@ -13,7 +13,6 @@ namespace Epinova.PostnordShipping
             if (String.IsNullOrWhiteSpace(timeoutSetting) || !Int32.TryParse(timeoutSetting, out int seconds))
                 seconds = DefaultTimeout;
             TimeOut = TimeSpan.FromSeconds(seconds);
-
         }
 
         public static TimeSpan TimeOut { get; set; }
